@@ -2,3 +2,9 @@
 .pytest_cache/
 .venv/
 .worktrees/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+src/*.egg-info/
+src/**/*.egg-info/
