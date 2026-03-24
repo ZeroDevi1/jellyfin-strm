@@ -1,0 +1,28 @@
+[project]
+name = "jellyfin-strm"
+version = "0.1.0"
+description = "为 Jellyfin 生成 115 网盘影子 STRM 库的同步工具"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "PyYAML>=6.0.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]
+
+[build-system]
+requires = ["setuptools>=80.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "-ra"

@@ -1,0 +1,57 @@
+version: "3.8"
+
+services:
+  jellyfin:
+    image: nyanmisaka/jellyfin:latest
+    container_name: jellyfin
+    privileged: true
+    restart: always
+    environment:
+      - PUID=1000
+      - PGID=10
+      - TZ=Asia/Shanghai
+    ports:
+      - 18096:8096
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - ./jellyfin/config:/config
+      - ./jellyfin/cache:/cache
+      - /volume1/Secret:/mnt/Secret
+      - /volume2/CloudNAS/CloudDrive/115open/Secret:/mnt/115open/Secret:ro
+
+  strm-sync-watch:
+    image: ghcr.io/zerodevi1/jellyfin-strm:latest
+    container_name: strm-sync-watch
+    restart: unless-stopped
+    command: ["watch", "--config", "/config/config.yaml", "--interval", "30"]
+    volumes:
+      - ./config.example.yaml:/config/config.yaml:ro
+      - /volume2/CloudNAS/CloudDrive/115open/Secret:/volume2/CloudNAS/CloudDrive/115open/Secret:ro
+      - /volume1/Secret/115strm:/volume1/Secret/115strm
+
+  strm-sync-daily:
+    image: ghcr.io/zerodevi1/jellyfin-strm:latest
+    container_name: strm-sync-daily
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-lc"]
+    command: ["trap : TERM INT; sleep infinity & wait"]
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.daily-sync.schedule: "@daily"
+      ofelia.job-exec.daily-sync.command: "jellyfin-strm sync --config /config/config.yaml"
+      ofelia.job-exec.daily-sync.no-overlap: "true"
+    volumes:
+      - ./config.example.yaml:/config/config.yaml:ro
+      - /volume2/CloudNAS/CloudDrive/115open/Secret:/volume2/CloudNAS/CloudDrive/115open/Secret:ro
+      - /volume1/Secret/115strm:/volume1/Secret/115strm
+
+  ofelia:
+    image: mcuadros/ofelia:latest
+    container_name: ofelia
+    restart: unless-stopped
+    depends_on:
+      - strm-sync-daily
+    command: daemon --docker -f label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro

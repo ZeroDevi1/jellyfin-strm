@@ -1,0 +1,10 @@
+.ace-tool/
+.git/
+.github/
+.pytest_cache/
+.venv/
+.worktrees/
+__pycache__/
+docs/
+tests/
+*.pyc

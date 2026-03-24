@@ -1,0 +1,64 @@
+source_root: /volume2/CloudNAS/CloudDrive/115open/Secret
+shadow_root: /volume1/Secret/115strm
+strm_prefix: /mnt/115open/Secret
+state_dir: /volume1/Secret/115strm/.jellyfin-strm-state
+
+video_extensions:
+  - .mp4
+  - .mkv
+  - .avi
+  - .ts
+  - .m2ts
+  - .mov
+
+sidecar_extensions:
+  - .nfo
+  - .jpg
+  - .jpeg
+  - .png
+  - .webp
+  - .srt
+  - .ass
+  - .ssa
+  - .sub
+  - .idx
+  - .sup
+  - .txt
+
+sidecar_name_patterns:
+  - poster
+  - fanart
+  - thumb
+  - clearlogo
+  - logo
+  - banner
+  - landscape
+  - disc
+  - keyart
+
+preserve_directories:
+  - behind the scenes
+  - extrafanart
+  - extrathumbs
+  - featurettes
+  - deleted scenes
+  - trailers
+
+exclude_directories:
+  - ".mount-health"
+  - ".@__thumb"
+  - "@eaDir"
+  - "$RECYCLE.BIN"
+  - "System Volume Information"
+  - ".DS_Store"
+  - "Thumbs.db"
+
+delete_ratio_limit: 0.25
+delete_count_limit: 20
+
+jellyfin:
+  enabled: false
+  server_url: http://jellyfin:8096
+  api_key: replace-me
+  library_name: 115strm
+  debounce_seconds: 600
