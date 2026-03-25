@@ -52,3 +52,27 @@ def test_execute_plan_blocks_large_delete_batch(tmp_path: Path) -> None:
             delete_ratio_limit=0.5,
             delete_count_limit=2,
         )
+
+
+def test_execute_plan_reports_copy_source_on_io_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    source_file = tmp_path / "source" / "movie.nfo"
+    source_file.parent.mkdir(parents=True)
+    source_file.write_text("<movie />", encoding="utf-8")
+    shadow_root = tmp_path / "shadow"
+    shadow_root.mkdir()
+
+    plan = SyncPlan(
+        write_strms=[],
+        copy_files=[PlannedCopy(Path("movie.nfo"), source_file)],
+        delete_paths=[],
+        warnings=[],
+        source_healthy=True,
+    )
+
+    def fake_copy2(_source: Path, _target: Path) -> None:
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr("jellyfin_strm.executor.shutil.copy2", fake_copy2)
+
+    with pytest.raises(RuntimeError, match="movie.nfo"):
+        execute_plan(plan=plan, shadow_root=shadow_root, dry_run=False)

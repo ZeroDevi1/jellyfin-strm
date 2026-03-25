@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from jellyfin_strm.config import load_config
-from jellyfin_strm.watch import SnapshotStore, build_directory_snapshot, run_watch_iteration
+from jellyfin_strm.watch import SnapshotStore, build_directory_snapshot, run_watch_iteration, run_watch_loop
 
 
 def test_snapshot_store_detects_changes(tmp_path: Path) -> None:
@@ -69,3 +69,49 @@ def test_watch_iteration_skips_unhealthy_source_without_overwriting_snapshot(sam
     assert run_watch_iteration(config, snapshot_store=store) is False
     after = (config.state_dir / "watch-snapshot.json").read_text(encoding="utf-8")
     assert after == before
+
+
+def test_build_directory_snapshot_returns_warning_when_stat_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "source"
+    source_root.mkdir(parents=True)
+    broken_file = source_root / "poster.jpg"
+    broken_file.write_text("image", encoding="utf-8")
+
+    original_stat = Path.stat
+
+    def fake_stat(self: Path, *args, **kwargs):
+        if self == broken_file:
+            raise OSError(5, "Input/output error")
+        return original_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", fake_stat)
+
+    snapshot = build_directory_snapshot(source_root)
+
+    assert snapshot.source_healthy is False
+    assert snapshot.warning is not None
+    assert "poster.jpg" in snapshot.warning
+
+
+def test_watch_loop_logs_io_error_and_keeps_running(
+    monkeypatch,
+    sample_config_text: str,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(sample_config_text, encoding="utf-8")
+    config = load_config(config_file)
+
+    def fake_iteration(*_args, **_kwargs) -> bool:
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr("jellyfin_strm.watch.run_watch_iteration", fake_iteration)
+    monkeypatch.setattr("jellyfin_strm.watch.time.sleep", lambda _seconds: None)
+
+    assert run_watch_loop(config, interval_seconds=0, max_loops=1) == 0
+    captured = capsys.readouterr()
+    assert "Input/output error" in captured.err

@@ -5,7 +5,14 @@ from pathlib import Path
 import sys
 
 from jellyfin_strm.config import load_config
-from jellyfin_strm.runtime import DeleteThresholdError, SourceHealthError, execute_sync, maybe_refresh_jellyfin, print_summary
+from jellyfin_strm.runtime import (
+    DeleteThresholdError,
+    SourceHealthError,
+    SyncIOError,
+    execute_sync,
+    maybe_refresh_jellyfin,
+    print_summary,
+)
 from jellyfin_strm.watch import run_watch_loop
 
 
@@ -39,7 +46,7 @@ def _run_sync(config_path: Path, dry_run: bool) -> int:
         summary = execute_sync(config, dry_run=dry_run)
         print_summary(summary)
         maybe_refresh_jellyfin(config, summary.has_changes, dry_run)
-    except (ValueError, DeleteThresholdError, SourceHealthError) as exc:
+    except (ValueError, DeleteThresholdError, SourceHealthError, SyncIOError, OSError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
     return 0

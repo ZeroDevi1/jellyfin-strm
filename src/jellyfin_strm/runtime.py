@@ -5,7 +5,7 @@ import sys
 import time
 
 from jellyfin_strm.config import SyncConfig
-from jellyfin_strm.executor import DeleteThresholdError, ExecutionSummary, SourceHealthError, execute_plan
+from jellyfin_strm.executor import DeleteThresholdError, ExecutionSummary, SourceHealthError, SyncIOError, execute_plan
 from jellyfin_strm.jellyfin import JellyfinClient, RefreshMarkerStore
 from jellyfin_strm.planner import build_sync_plan
 from jellyfin_strm.rules import RuleSet
@@ -78,6 +78,7 @@ __all__ = [
     "DeleteThresholdError",
     "ExecutionSummary",
     "SourceHealthError",
+    "SyncIOError",
     "emit_warnings",
     "execute_sync",
     "maybe_refresh_jellyfin",
