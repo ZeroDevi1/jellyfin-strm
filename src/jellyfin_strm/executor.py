@@ -15,6 +15,10 @@ class SourceHealthError(RuntimeError):
     """源目录健康检查失败。"""
 
 
+class SyncIOError(RuntimeError):
+    """同步过程中发生文件读写错误。"""
+
+
 @dataclass(slots=True)
 class ExecutionSummary:
     written_strms: int = 0
@@ -55,26 +59,52 @@ def execute_plan(
     for item in plan.write_strms:
         target_path = shadow_root / item.relative_path
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_text(f"{item.content}\n", encoding="utf-8")
+        try:
+            target_path.write_text(f"{item.content}\n", encoding="utf-8")
+        except OSError as exc:
+            raise SyncIOError(_build_io_error_message("写入 STRM", exc, target_path=target_path)) from exc
         summary.written_strms += 1
 
     for item in plan.copy_files:
         target_path = shadow_root / item.relative_path
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(item.source_path, target_path)
+        try:
+            shutil.copy2(item.source_path, target_path)
+        except OSError as exc:
+            raise SyncIOError(
+                _build_io_error_message("复制 sidecar", exc, source_path=item.source_path, target_path=target_path)
+            ) from exc
         summary.copied_files += 1
 
     for relative_path in plan.delete_paths:
         target_path = shadow_root / relative_path
         if not target_path.exists():
             continue
-        if target_path.is_dir():
-            shutil.rmtree(target_path)
-        else:
-            target_path.unlink()
+        try:
+            if target_path.is_dir():
+                shutil.rmtree(target_path)
+            else:
+                target_path.unlink()
+        except OSError as exc:
+            raise SyncIOError(_build_io_error_message("删除影子文件", exc, target_path=target_path)) from exc
         summary.deleted_paths += 1
 
     return summary
+
+
+def _build_io_error_message(
+    action: str,
+    exc: OSError,
+    source_path: Path | None = None,
+    target_path: Path | None = None,
+) -> str:
+    parts = [f"{action}失败"]
+    if source_path is not None:
+        parts.append(f"source={source_path}")
+    if target_path is not None:
+        parts.append(f"target={target_path}")
+    parts.append(f"error={exc}")
+    return "；".join(parts)
 
 
 def _guard_delete_thresholds(

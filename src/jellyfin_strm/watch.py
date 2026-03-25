@@ -9,7 +9,7 @@ import sys
 import time
 
 from jellyfin_strm.config import SyncConfig
-from jellyfin_strm.executor import DeleteThresholdError, SourceHealthError
+from jellyfin_strm.executor import DeleteThresholdError, SourceHealthError, SyncIOError
 from jellyfin_strm.rules import RuleSet
 from jellyfin_strm.runtime import execute_sync, maybe_refresh_jellyfin, print_summary
 
@@ -64,7 +64,16 @@ def build_directory_snapshot(source_root: Path, rules: RuleSet | None = None) ->
             entries.append(f"dir:{relative_path.as_posix()}")
         for file_name in sorted(files):
             file_path = root_path / file_name
-            stat = file_path.stat()
+            # 挂载抖动时，单个文件 stat 失败也应视为本轮源目录不健康，而不是让 watch 崩溃。
+            try:
+                stat = file_path.stat()
+            except OSError as exc:
+                return DirectorySnapshot(
+                    digest="",
+                    entry_count=len(entries),
+                    source_healthy=False,
+                    warning=f"源目录健康检查失败：读取 {file_path} 时出错：{exc}",
+                )
             relative_path = file_path.relative_to(source_root)
             entries.append(
                 f"file:{relative_path.as_posix()}:{stat.st_size}:{stat.st_mtime_ns}"
@@ -110,7 +119,8 @@ def run_watch_loop(
     while True:
         try:
             run_watch_iteration(config, snapshot_store=snapshot_store)
-        except (DeleteThresholdError, SourceHealthError, ValueError) as exc:
+        # I/O 错误通常来自远端挂载抖动，记录后保留现场，等待下轮重试。
+        except (DeleteThresholdError, SourceHealthError, SyncIOError, ValueError, OSError) as exc:
             print(str(exc), file=sys.stderr)
 
         iteration += 1
