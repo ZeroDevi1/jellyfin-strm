@@ -53,6 +53,7 @@ exclude_directories:
   - ".DS_Store"
   - "Thumbs.db"
 
+# 当前版本为兼容影子库内独立维护的元数据，不主动执行删除；以下阈值暂不生效。
 delete_ratio_limit: 0.25
 delete_count_limit: 20
 

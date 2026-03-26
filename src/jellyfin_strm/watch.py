@@ -9,7 +9,7 @@ import sys
 import time
 
 from jellyfin_strm.config import SyncConfig
-from jellyfin_strm.executor import DeleteThresholdError, SourceHealthError, SyncIOError
+from jellyfin_strm.executor import SourceHealthError, SyncIOError
 from jellyfin_strm.rules import RuleSet
 from jellyfin_strm.runtime import execute_sync, maybe_refresh_jellyfin, print_summary
 
@@ -37,7 +37,9 @@ class SnapshotStore:
             "saved_at": int(time.time()),
         }
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        self.state_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.state_file.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     def _load(self) -> dict[str, object]:
         if not self.state_file.exists():
@@ -45,7 +47,9 @@ class SnapshotStore:
         return json.loads(self.state_file.read_text(encoding="utf-8"))
 
 
-def build_directory_snapshot(source_root: Path, rules: RuleSet | None = None) -> DirectorySnapshot:
+def build_directory_snapshot(
+    source_root: Path, rules: RuleSet | None = None
+) -> DirectorySnapshot:
     active_rules = rules or RuleSet.default()
     if not source_root.is_dir():
         return DirectorySnapshot(
@@ -88,7 +92,9 @@ def build_directory_snapshot(source_root: Path, rules: RuleSet | None = None) ->
         )
 
     digest = hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
-    return DirectorySnapshot(digest=digest, entry_count=len(entries), source_healthy=True)
+    return DirectorySnapshot(
+        digest=digest, entry_count=len(entries), source_healthy=True
+    )
 
 
 def run_watch_iteration(config: SyncConfig, snapshot_store: SnapshotStore) -> bool:
@@ -120,7 +126,7 @@ def run_watch_loop(
         try:
             run_watch_iteration(config, snapshot_store=snapshot_store)
         # I/O 错误通常来自远端挂载抖动，记录后保留现场，等待下轮重试。
-        except (DeleteThresholdError, SourceHealthError, SyncIOError, ValueError, OSError) as exc:
+        except (SourceHealthError, SyncIOError, ValueError, OSError) as exc:
             print(str(exc), file=sys.stderr)
 
         iteration += 1

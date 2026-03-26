@@ -5,7 +5,12 @@ import sys
 import time
 
 from jellyfin_strm.config import SyncConfig
-from jellyfin_strm.executor import DeleteThresholdError, ExecutionSummary, SourceHealthError, SyncIOError, execute_plan
+from jellyfin_strm.executor import (
+    ExecutionSummary,
+    SourceHealthError,
+    SyncIOError,
+    execute_plan,
+)
 from jellyfin_strm.jellyfin import JellyfinClient, RefreshMarkerStore
 from jellyfin_strm.planner import build_sync_plan
 from jellyfin_strm.rules import RuleSet
@@ -23,8 +28,6 @@ def execute_sync(config: SyncConfig, dry_run: bool) -> ExecutionSummary:
         plan=plan,
         shadow_root=config.shadow_root,
         dry_run=dry_run,
-        delete_ratio_limit=config.delete_ratio_limit,
-        delete_count_limit=config.delete_count_limit,
     )
     return summary
 
@@ -46,7 +49,9 @@ def print_summary(summary: ExecutionSummary) -> None:
     )
 
 
-def maybe_refresh_jellyfin(config: SyncConfig, has_changes: bool, dry_run: bool) -> None:
+def maybe_refresh_jellyfin(
+    config: SyncConfig, has_changes: bool, dry_run: bool
+) -> None:
     if dry_run or not has_changes or not config.jellyfin.enabled:
         return
 
@@ -62,7 +67,10 @@ def maybe_refresh_jellyfin(config: SyncConfig, has_changes: bool, dry_run: bool)
         return
 
     if not config.jellyfin.server_url or not config.jellyfin.api_key:
-        print("Jellyfin 已启用，但 server_url 或 api_key 未配置，已跳过刷新", file=sys.stderr)
+        print(
+            "Jellyfin 已启用，但 server_url 或 api_key 未配置，已跳过刷新",
+            file=sys.stderr,
+        )
         return
 
     client = JellyfinClient(
@@ -75,7 +83,6 @@ def maybe_refresh_jellyfin(config: SyncConfig, has_changes: bool, dry_run: bool)
 
 
 __all__ = [
-    "DeleteThresholdError",
     "ExecutionSummary",
     "SourceHealthError",
     "SyncIOError",
