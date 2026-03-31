@@ -9,7 +9,6 @@ import time
 
 from jellyfin_strm.config import SyncConfig
 from jellyfin_strm.executor import SourceHealthError, SyncIOError
-from jellyfin_strm.rules import RuleSet
 from jellyfin_strm.runtime import execute_sync, maybe_refresh_jellyfin, print_summary
 
 
@@ -46,54 +45,51 @@ class SnapshotStore:
         return json.loads(self.state_file.read_text(encoding="utf-8"))
 
 
-def build_source_snapshot(
-    source_root: Path, rules: RuleSet | None = None
-) -> DirectorySnapshot:
+def build_shadow_snapshot(shadow_root: Path) -> DirectorySnapshot:
     """
-    构建源目录的快照。
-    递归遍历所有子目录，收集所有视频文件的状态。
+    构建影子目录的快照。
+    递归遍历所有子目录，收集目录结构和 strm 文件状态。
     """
-    active_rules = rules or RuleSet.default()
-    if not source_root.is_dir():
+    if not shadow_root.exists():
+        # shadow_root 不存在，视为空目录，后续会创建
+        return DirectorySnapshot(
+            digest=hashlib.sha256(b"").hexdigest(),
+            entry_count=0,
+            source_healthy=True,
+        )
+
+    if not shadow_root.is_dir():
         return DirectorySnapshot(
             digest="",
             entry_count=0,
             source_healthy=False,
-            warning=f"源目录健康检查失败：{source_root} 不存在或不可读",
+            warning=f"影子目录检查失败：{shadow_root} 不是目录",
         )
 
     entries: list[str] = []
     try:
-        # 递归遍历所有子目录中的视频文件
-        for file_path in sorted(source_root.rglob("*")):
-            if file_path.is_file() and active_rules.is_video(file_path.name):
-                try:
-                    stat = file_path.stat()
-                except OSError as exc:
-                    return DirectorySnapshot(
-                        digest="",
-                        entry_count=len(entries),
-                        source_healthy=False,
-                        warning=f"源目录健康检查失败：读取 {file_path} 时出错：{exc}",
-                    )
-                relative_path = file_path.relative_to(source_root)
+        # 递归遍历所有子目录，收集目录结构和 strm 文件
+        for path in sorted(shadow_root.rglob("*")):
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+
+            relative_path = path.relative_to(shadow_root)
+            if path.is_dir():
+                # 记录目录存在
+                entries.append(f"dir:{relative_path.as_posix()}:{stat.st_mtime_ns}")
+            elif path.is_file() and path.suffix.lower() == ".strm":
+                # 记录 strm 文件
                 entries.append(
-                    f"file:{relative_path.as_posix()}:{stat.st_size}:{stat.st_mtime_ns}"
+                    f"strm:{relative_path.as_posix()}:{stat.st_size}:{stat.st_mtime_ns}"
                 )
     except OSError as exc:
         return DirectorySnapshot(
             digest="",
             entry_count=0,
             source_healthy=False,
-            warning=f"源目录健康检查失败：无法读取目录 {source_root}：{exc}",
-        )
-
-    if not entries:
-        return DirectorySnapshot(
-            digest="",
-            entry_count=0,
-            source_healthy=False,
-            warning=f"源目录健康检查失败：{source_root} 中没有视频文件",
+            warning=f"影子目录检查失败：无法读取目录 {shadow_root}：{exc}",
         )
 
     digest = hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
@@ -103,27 +99,27 @@ def build_source_snapshot(
 
 
 def run_watch_iteration(config: SyncConfig, snapshot_store: SnapshotStore) -> bool:
-    # 检查源目录是否有变化
-    snapshot = build_source_snapshot(config.source_root, RuleSet.from_config(config))
+    # 检查影子目录是否有变化（新增/删除目录、strm 文件变化）
+    snapshot = build_shadow_snapshot(config.shadow_root)
     if not snapshot.source_healthy:
         if snapshot.warning:
             print(snapshot.warning, file=sys.stderr)
         return False
 
-    # 即使源目录没有变化，也可能需要同步（比如 shadow 中新增了没有 strm 的目录）
-    # 所以每次都要执行 sync，但只在有变化时刷新 Jellyfin
+    # 只有影子目录结构变化时才执行同步
+    if not snapshot_store.has_changed(snapshot):
+        return False
+
+    # 执行同步：扫描 shadow 中无 strm 的目录，到 source 查找视频生成 strm
     summary = execute_sync(config, dry_run=False)
 
     if summary.has_changes:
         print_summary(summary)
         maybe_refresh_jellyfin(config, summary.has_changes, dry_run=False)
-        snapshot_store.save(snapshot)
-        return True
-    else:
-        print("没有需要同步的内容", file=sys.stderr)
-        # 仍然保存快照，记录本次检查时间
-        snapshot_store.save(snapshot)
-        return False
+
+    # 保存快照
+    snapshot_store.save(snapshot)
+    return summary.has_changes
 
 
 def run_watch_loop(

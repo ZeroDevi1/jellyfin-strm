@@ -3,38 +3,53 @@ from pathlib import Path
 from jellyfin_strm.config import load_config
 from jellyfin_strm.watch import (
     SnapshotStore,
-    build_source_snapshot,
+    build_shadow_snapshot,
     run_watch_iteration,
     run_watch_loop,
 )
 
 
-def test_snapshot_store_detects_changes(tmp_path: Path) -> None:
-    source_root = tmp_path / "source"
+def test_snapshot_store_detects_shadow_changes(tmp_path: Path) -> None:
+    """测试影子目录快照能检测到目录结构变化"""
+    shadow_root = tmp_path / "shadow"
     state_file = tmp_path / "state" / "watch-snapshot.json"
-    source_root.mkdir(parents=True)
+    shadow_root.mkdir(parents=True)
 
-    # 在子目录中创建视频文件
-    (source_root / "演员A" / "番号B").mkdir(parents=True)
-    movie_file = source_root / "演员A" / "番号B" / "movie.mp4"
-    movie_file.write_text("v1", encoding="utf-8")
+    # 创建初始目录结构
+    (shadow_root / "演员A" / "番号B").mkdir(parents=True)
 
     store = SnapshotStore(state_file)
-    snapshot = build_source_snapshot(source_root)
+    snapshot = build_shadow_snapshot(shadow_root)
 
     assert snapshot.source_healthy is True
-    assert snapshot.entry_count == 1
+    assert snapshot.entry_count == 2  # 2 个目录（演员A 和 番号B）
     assert store.has_changed(snapshot) is True
 
     store.save(snapshot)
-    assert store.has_changed(build_source_snapshot(source_root)) is False
+    assert store.has_changed(build_shadow_snapshot(shadow_root)) is False
 
-    # 修改文件内容并强制更新修改时间
-    import time
+    # 新增目录应该触发变化（新增 2 个目录：演员C 和 番号D）
+    (shadow_root / "演员C" / "番号D").mkdir(parents=True)
+    new_snapshot = build_shadow_snapshot(shadow_root)
+    assert new_snapshot.entry_count == 4  # 总共 4 个目录
+    assert store.has_changed(new_snapshot) is True
 
-    time.sleep(0.1)  # 确保 mtime 改变
-    movie_file.write_text("v2", encoding="utf-8")
-    assert store.has_changed(build_source_snapshot(source_root)) is True
+
+def test_shadow_snapshot_detects_strm_changes(tmp_path: Path) -> None:
+    """测试影子目录快照能检测到 strm 文件变化"""
+    shadow_root = tmp_path / "shadow"
+    (shadow_root / "演员A" / "番号B").mkdir(parents=True)
+
+    store = SnapshotStore(tmp_path / "state.json")
+    snapshot1 = build_shadow_snapshot(shadow_root)
+    store.save(snapshot1)
+
+    # 添加 strm 文件应该触发变化
+    (shadow_root / "演员A" / "番号B" / "movie.strm").write_text(
+        "/path/to/video.mp4", encoding="utf-8"
+    )
+    snapshot2 = build_shadow_snapshot(shadow_root)
+    assert store.has_changed(snapshot2) is True
 
 
 def test_watch_iteration_writes_snapshot_and_syncs(
@@ -97,32 +112,51 @@ def test_watch_iteration_skips_when_shadow_has_strm(
     assert changed is False
 
 
-def test_watch_iteration_skips_unhealthy_source_without_overwriting_snapshot(
+def test_watch_iteration_skips_unchanged_shadow(
     sample_config_text: str, tmp_path: Path
 ) -> None:
+    """测试当 shadow 目录无变化时跳过迭代"""
     config_file = tmp_path / "config.yaml"
     config_file.write_text(sample_config_text, encoding="utf-8")
 
     config = load_config(config_file)
     config.source_root.mkdir(parents=True)
     config.shadow_root.mkdir(parents=True)
-    (config.source_root / "demo.mp4").write_text("video", encoding="utf-8")
+
+    # 创建 shadow 目录结构和 strm 文件
+    (config.shadow_root / "演员A" / "番号B").mkdir(parents=True)
+    (config.shadow_root / "演员A" / "番号B" / "demo.strm").write_text(
+        "/path", encoding="utf-8"
+    )
 
     store = SnapshotStore(config.state_dir / "watch-snapshot.json")
-    assert run_watch_iteration(config, snapshot_store=store) is True
-    before = (config.state_dir / "watch-snapshot.json").read_text(encoding="utf-8")
 
-    for path in sorted(config.source_root.rglob("*"), reverse=True):
-        if path.is_file():
-            path.unlink()
-        else:
-            path.rmdir()
-    config.source_root.rmdir()
+    # 第一次运行，保存快照
+    changed1 = run_watch_iteration(config, snapshot_store=store)
+    assert changed1 is False  # 已有 strm，没有变化
 
-    assert run_watch_iteration(config, snapshot_store=store) is False
-    after = (config.state_dir / "watch-snapshot.json").read_text(encoding="utf-8")
-    # 不健康时不应该覆盖快照
-    assert after == before
+    # 第二次运行，shadow 无变化，应该直接返回 False
+    changed2 = run_watch_iteration(config, snapshot_store=store)
+    assert changed2 is False
+
+
+def test_watch_iteration_handles_missing_shadow(
+    sample_config_text: str, tmp_path: Path
+) -> None:
+    """测试当 shadow 目录不存在时的处理"""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(sample_config_text, encoding="utf-8")
+
+    config = load_config(config_file)
+    config.source_root.mkdir(parents=True)
+    # shadow_root 故意不创建
+
+    store = SnapshotStore(config.state_dir / "watch-snapshot.json")
+
+    # shadow 不存在，应该视为空目录，尝试执行同步
+    # 但因为没有目录结构，不会生成 strm
+    changed = run_watch_iteration(config, snapshot_store=store)
+    assert changed is False
 
 
 def test_watch_loop_logs_io_error_and_keeps_running(
