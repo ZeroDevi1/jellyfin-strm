@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import os
 
 from jellyfin_strm.rules import RuleSet
 
@@ -28,66 +27,103 @@ class SyncPlan:
     source_healthy: bool
 
 
+def _has_strm_in_directory(dir_path: Path) -> bool:
+    """检查目录中是否存在任何 .strm 文件（不递归子目录）"""
+    if not dir_path.exists():
+        return False
+    try:
+        for item in dir_path.iterdir():
+            if item.is_file() and item.suffix.lower() == ".strm":
+                return True
+    except OSError:
+        return False
+    return False
+
+
+def _get_subdirectories(root: Path) -> list[Path]:
+    """获取根目录下的所有子目录（递归）"""
+    subdirs = []
+    if not root.exists():
+        return subdirs
+    try:
+        for item in root.rglob("*"):
+            if item.is_dir():
+                subdirs.append(item)
+    except OSError:
+        pass
+    return subdirs
+
+
+def _find_videos_in_directory(dir_path: Path, rules: RuleSet) -> list[Path]:
+    """在目录中查找所有视频文件（不递归）"""
+    videos = []
+    if not dir_path.exists():
+        return videos
+    try:
+        for item in dir_path.iterdir():
+            if item.is_file() and rules.is_video(item.name):
+                videos.append(item)
+    except OSError:
+        pass
+    return videos
+
+
 def build_sync_plan(
     source_root: Path,
     shadow_root: Path,
     strm_prefix: str,
     rules: RuleSet | None = None,
 ) -> SyncPlan:
+    """
+    构建同步计划。
+
+    策略：以 shadow_root 为驱动，检查哪些子目录还没有 strm 文件，
+    然后到 source_root 对应路径查找视频并创建 strm。
+    """
     active_rules = rules or RuleSet.default()
     warnings: list[str] = []
+
     if not source_root.is_dir():
         return SyncPlan(
             [], [], [], [f"源目录健康检查失败：{source_root} 不存在或不可读"], False
         )
 
-    source_entries = _count_source_entries(source_root, active_rules)
-    if source_entries == 0:
-        return SyncPlan(
-            [],
-            [],
-            [],
-            [f"源目录健康检查失败：{source_root} 为空或仅包含被排除目录"],
-            False,
-        )
+    if not shadow_root.exists():
+        # shadow_root 不存在，视为全部需要处理
+        shadow_root.mkdir(parents=True, exist_ok=True)
 
     write_strms: list[PlannedWrite] = []
-    copy_files: list[PlannedCopy] = []
-    expected_files: set[Path] = set()
 
-    for current_root, dirs, files in os.walk(source_root):
-        dirs[:] = sorted(d for d in dirs if not active_rules.should_skip_directory(d))
-        root_path = Path(current_root)
-        for file_name in sorted(files):
-            source_path = root_path / file_name
-            relative_path = source_path.relative_to(source_root)
-            if active_rules.is_video(file_name):
-                target_relative = relative_path.with_suffix(".strm")
-                if target_relative not in expected_files:
-                    write_strms.append(
-                        PlannedWrite(
-                            relative_path=target_relative,
-                            content=f"{strm_prefix.rstrip('/')}/{relative_path.as_posix()}",
-                        )
-                    )
-                    expected_files.add(target_relative)
-            elif active_rules.is_sidecar_file(file_name):
-                if relative_path not in expected_files:
-                    copy_files.append(
-                        PlannedCopy(
-                            relative_path=relative_path, source_path=source_path
-                        )
-                    )
-                    expected_files.add(relative_path)
+    # 获取 shadow_root 下的所有子目录（包括 shadow_root 本身）
+    shadow_dirs = [shadow_root] + _get_subdirectories(shadow_root)
 
-    # 影子库中现在可能会保留独立维护的 NFO/图片等元数据，不能再按“源目录缺失即删除”处理。
-    # 为兼容既有数据，这里只增量写入 STRM / sidecar，不主动删除影子库已有内容。
-    return SyncPlan(write_strms, copy_files, [], warnings, True)
+    for shadow_dir in shadow_dirs:
+        # 检查该目录是否已有 strm 文件
+        if _has_strm_in_directory(shadow_dir):
+            continue
 
+        # 计算对应的 source 目录路径
+        try:
+            relative_dir = shadow_dir.relative_to(shadow_root)
+        except ValueError:
+            continue
 
-def _count_source_entries(source_root: Path, rules: RuleSet) -> int:
-    count = 0
-    for current_root, dirs, files in os.walk(source_root):
-        dirs[:] = [d for d in dirs if not rules.should_skip_directory(d)]
-        count += len(dirs) + len(files)
-    return count
+        source_dir = source_root / relative_dir
+
+        # 在 source 目录中查找视频文件
+        videos = _find_videos_in_directory(source_dir, active_rules)
+
+        for video_path in sorted(videos):
+            # 计算 strm 文件的相对路径
+            video_relative = video_path.relative_to(source_root)
+            strm_relative = video_relative.with_suffix(".strm")
+
+            write_strms.append(
+                PlannedWrite(
+                    relative_path=strm_relative,
+                    content=f"{strm_prefix.rstrip('/')}/{video_relative.as_posix()}",
+                )
+            )
+
+    # 不再同步 sidecar 文件（png, nfo 等元数据）
+    return SyncPlan(write_strms, [], [], warnings, True)

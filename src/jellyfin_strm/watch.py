@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
-import os
 from pathlib import Path
 import sys
 import time
@@ -47,9 +46,13 @@ class SnapshotStore:
         return json.loads(self.state_file.read_text(encoding="utf-8"))
 
 
-def build_directory_snapshot(
+def build_source_snapshot(
     source_root: Path, rules: RuleSet | None = None
 ) -> DirectorySnapshot:
+    """
+    构建源目录的快照。
+    递归遍历所有子目录，收集所有视频文件的状态。
+    """
     active_rules = rules or RuleSet.default()
     if not source_root.is_dir():
         return DirectorySnapshot(
@@ -60,35 +63,37 @@ def build_directory_snapshot(
         )
 
     entries: list[str] = []
-    for current_root, dirs, files in os.walk(source_root):
-        dirs[:] = sorted(d for d in dirs if not active_rules.should_skip_directory(d))
-        root_path = Path(current_root)
-        for directory_name in dirs:
-            relative_path = (root_path / directory_name).relative_to(source_root)
-            entries.append(f"dir:{relative_path.as_posix()}")
-        for file_name in sorted(files):
-            file_path = root_path / file_name
-            # 挂载抖动时，单个文件 stat 失败也应视为本轮源目录不健康，而不是让 watch 崩溃。
-            try:
-                stat = file_path.stat()
-            except OSError as exc:
-                return DirectorySnapshot(
-                    digest="",
-                    entry_count=len(entries),
-                    source_healthy=False,
-                    warning=f"源目录健康检查失败：读取 {file_path} 时出错：{exc}",
+    try:
+        # 递归遍历所有子目录中的视频文件
+        for file_path in sorted(source_root.rglob("*")):
+            if file_path.is_file() and active_rules.is_video(file_path.name):
+                try:
+                    stat = file_path.stat()
+                except OSError as exc:
+                    return DirectorySnapshot(
+                        digest="",
+                        entry_count=len(entries),
+                        source_healthy=False,
+                        warning=f"源目录健康检查失败：读取 {file_path} 时出错：{exc}",
+                    )
+                relative_path = file_path.relative_to(source_root)
+                entries.append(
+                    f"file:{relative_path.as_posix()}:{stat.st_size}:{stat.st_mtime_ns}"
                 )
-            relative_path = file_path.relative_to(source_root)
-            entries.append(
-                f"file:{relative_path.as_posix()}:{stat.st_size}:{stat.st_mtime_ns}"
-            )
+    except OSError as exc:
+        return DirectorySnapshot(
+            digest="",
+            entry_count=0,
+            source_healthy=False,
+            warning=f"源目录健康检查失败：无法读取目录 {source_root}：{exc}",
+        )
 
     if not entries:
         return DirectorySnapshot(
             digest="",
             entry_count=0,
             source_healthy=False,
-            warning=f"源目录健康检查失败：{source_root} 为空或仅包含被排除目录",
+            warning=f"源目录健康检查失败：{source_root} 中没有视频文件",
         )
 
     digest = hashlib.sha256("\n".join(entries).encode("utf-8")).hexdigest()
@@ -98,21 +103,27 @@ def build_directory_snapshot(
 
 
 def run_watch_iteration(config: SyncConfig, snapshot_store: SnapshotStore) -> bool:
-    snapshot = build_directory_snapshot(config.source_root, RuleSet.from_config(config))
+    # 检查源目录是否有变化
+    snapshot = build_source_snapshot(config.source_root, RuleSet.from_config(config))
     if not snapshot.source_healthy:
         if snapshot.warning:
             print(snapshot.warning, file=sys.stderr)
         return False
 
-    if not snapshot_store.has_changed(snapshot):
-        print("watch 未检测到目录变化，跳过同步", file=sys.stderr)
-        return False
-
+    # 即使源目录没有变化，也可能需要同步（比如 shadow 中新增了没有 strm 的目录）
+    # 所以每次都要执行 sync，但只在有变化时刷新 Jellyfin
     summary = execute_sync(config, dry_run=False)
-    print_summary(summary)
-    maybe_refresh_jellyfin(config, summary.has_changes, dry_run=False)
-    snapshot_store.save(snapshot)
-    return True
+
+    if summary.has_changes:
+        print_summary(summary)
+        maybe_refresh_jellyfin(config, summary.has_changes, dry_run=False)
+        snapshot_store.save(snapshot)
+        return True
+    else:
+        print("没有需要同步的内容", file=sys.stderr)
+        # 仍然保存快照，记录本次检查时间
+        snapshot_store.save(snapshot)
+        return False
 
 
 def run_watch_loop(
