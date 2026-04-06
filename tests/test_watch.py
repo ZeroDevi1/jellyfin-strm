@@ -62,8 +62,11 @@ def test_watch_iteration_writes_snapshot_and_syncs(
     config.source_root.mkdir(parents=True)
     config.shadow_root.mkdir(parents=True)
 
-    # 创建 shadow 目录结构（番号B 没有 strm）
+    # 创建 shadow 目录结构（番号B 有 nfo 但没有对应的 strm）
     (config.shadow_root / "演员A" / "番号B").mkdir(parents=True)
+    (config.shadow_root / "演员A" / "番号B" / "demo.nfo").write_text(
+        "<movie></movie>", encoding="utf-8"
+    )
 
     # 在 source 对应目录创建视频
     (config.source_root / "演员A" / "番号B").mkdir(parents=True)
@@ -81,10 +84,10 @@ def test_watch_iteration_writes_snapshot_and_syncs(
     assert (config.state_dir / "watch-snapshot.json").exists()
 
 
-def test_watch_iteration_skips_when_shadow_has_strm(
+def test_watch_iteration_skips_when_has_strm_for_nfo(
     sample_config_text: str, tmp_path: Path
 ) -> None:
-    """测试当 shadow 目录已有 strm 时跳过"""
+    """测试当 nfo 已有对应 strm 时跳过"""
     config_file = tmp_path / "config.yaml"
     config_file.write_text(sample_config_text, encoding="utf-8")
 
@@ -92,9 +95,12 @@ def test_watch_iteration_skips_when_shadow_has_strm(
     config.source_root.mkdir(parents=True)
     config.shadow_root.mkdir(parents=True)
 
-    # 创建 shadow 目录结构，番号B 已有 strm
+    # 创建 shadow 目录结构，番号B 有 nfo 且已有对应的 strm
     (config.shadow_root / "演员A" / "番号B").mkdir(parents=True)
-    (config.shadow_root / "演员A" / "番号B" / "existing.strm").write_text(
+    (config.shadow_root / "演员A" / "番号B" / "demo.nfo").write_text(
+        "<movie></movie>", encoding="utf-8"
+    )
+    (config.shadow_root / "演员A" / "番号B" / "demo.strm").write_text(
         "/path", encoding="utf-8"
     )
 
@@ -108,7 +114,7 @@ def test_watch_iteration_skips_when_shadow_has_strm(
 
     changed = run_watch_iteration(config, snapshot_store=store)
 
-    # 由于已有 strm，不应该创建新的
+    # 由于已有对应 strm，不应该创建新的
     assert changed is False
 
 
@@ -123,8 +129,11 @@ def test_watch_iteration_skips_unchanged_shadow(
     config.source_root.mkdir(parents=True)
     config.shadow_root.mkdir(parents=True)
 
-    # 创建 shadow 目录结构和 strm 文件
+    # 创建 shadow 目录结构和 nfo、strm 文件
     (config.shadow_root / "演员A" / "番号B").mkdir(parents=True)
+    (config.shadow_root / "演员A" / "番号B" / "demo.nfo").write_text(
+        "<movie></movie>", encoding="utf-8"
+    )
     (config.shadow_root / "演员A" / "番号B" / "demo.strm").write_text(
         "/path", encoding="utf-8"
     )

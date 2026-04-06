@@ -27,45 +27,46 @@ class SyncPlan:
     source_healthy: bool
 
 
-def _has_strm_in_directory(dir_path: Path) -> bool:
-    """检查目录中是否存在任何 .strm 文件（不递归子目录）"""
-    if not dir_path.exists():
-        return False
-    try:
-        for item in dir_path.iterdir():
-            if item.is_file() and item.suffix.lower() == ".strm":
-                return True
-    except OSError:
-        return False
-    return False
-
-
-def _get_subdirectories(root: Path) -> list[Path]:
-    """获取根目录下的所有子目录（递归）"""
-    subdirs = []
+def _find_nfo_files(root: Path) -> list[Path]:
+    """递归查找所有 .nfo 文件"""
+    nfos = []
     if not root.exists():
-        return subdirs
+        return nfos
     try:
-        for item in root.rglob("*"):
-            if item.is_dir():
-                subdirs.append(item)
+        for item in root.rglob("*.nfo"):
+            if item.is_file():
+                nfos.append(item)
     except OSError:
         pass
-    return subdirs
+    return nfos
 
 
-def _find_videos_in_directory(dir_path: Path, rules: RuleSet) -> list[Path]:
-    """在目录中查找所有视频文件（不递归）"""
-    videos = []
-    if not dir_path.exists():
-        return videos
+def _has_strm_for_nfo(nfo_path: Path) -> bool:
+    """检查是否存在与 nfo 文件同名的 strm 文件"""
+    strm_path = nfo_path.with_suffix(".strm")
+    return strm_path.exists()
+
+
+def _find_video_for_nfo(
+    nfo_path: Path, source_dir: Path, rules: RuleSet
+) -> Path | None:
+    """
+    在 source 目录中查找与 nfo 对应的视频文件。
+    匹配规则：视频文件名（不含后缀）与 nfo 文件名（不含后缀）相同。
+    """
+    if not source_dir.exists():
+        return None
+
+    nfo_stem = nfo_path.stem.lower()
+
     try:
-        for item in dir_path.iterdir():
+        for item in source_dir.iterdir():
             if item.is_file() and rules.is_video(item.name):
-                videos.append(item)
+                if item.stem.lower() == nfo_stem:
+                    return item
     except OSError:
         pass
-    return videos
+    return None
 
 
 def build_sync_plan(
@@ -77,8 +78,10 @@ def build_sync_plan(
     """
     构建同步计划。
 
-    策略：以 shadow_root 为驱动，检查哪些子目录还没有 strm 文件，
-    然后到 source_root 对应路径查找视频并创建 strm。
+    策略：以 shadow 目录中的 .nfo 文件为驱动，检查每个 .nfo 是否有对应的 .strm 文件。
+    如果没有对应的 .strm，就到 source 目录查找同名的视频文件并创建 .strm。
+
+    一个文件夹内有多个视频时，会为每个缺失对应 strm 的 nfo 创建链接。
     """
     active_rules = rules or RuleSet.default()
     warnings: list[str] = []
@@ -89,41 +92,42 @@ def build_sync_plan(
         )
 
     if not shadow_root.exists():
-        # shadow_root 不存在，视为全部需要处理
-        shadow_root.mkdir(parents=True, exist_ok=True)
+        # shadow_root 不存在，没有 nfo 文件，无需处理
+        return SyncPlan([], [], [], [], True)
 
     write_strms: list[PlannedWrite] = []
 
-    # 获取 shadow_root 下的所有子目录（包括 shadow_root 本身）
-    shadow_dirs = [shadow_root] + _get_subdirectories(shadow_root)
+    # 查找所有 .nfo 文件
+    nfo_files = _find_nfo_files(shadow_root)
 
-    for shadow_dir in shadow_dirs:
-        # 检查该目录是否已有 strm 文件
-        if _has_strm_in_directory(shadow_dir):
+    for nfo_path in nfo_files:
+        # 检查是否已有对应的 .strm 文件
+        if _has_strm_for_nfo(nfo_path):
             continue
 
-        # 计算对应的 source 目录路径
+        # 计算对应的 source 目录
         try:
-            relative_dir = shadow_dir.relative_to(shadow_root)
+            relative_dir = nfo_path.parent.relative_to(shadow_root)
         except ValueError:
             continue
 
         source_dir = source_root / relative_dir
 
-        # 在 source 目录中查找视频文件
-        videos = _find_videos_in_directory(source_dir, active_rules)
+        # 查找与 nfo 同名的视频文件
+        video_path = _find_video_for_nfo(nfo_path, source_dir, active_rules)
+        if video_path is None:
+            warnings.append(f"未找到与 {nfo_path} 对应的视频文件")
+            continue
 
-        for video_path in sorted(videos):
-            # 计算 strm 文件的相对路径
-            video_relative = video_path.relative_to(source_root)
-            strm_relative = video_relative.with_suffix(".strm")
+        # 创建 strm 文件计划
+        video_relative = video_path.relative_to(source_root)
+        strm_relative = video_relative.with_suffix(".strm")
 
-            write_strms.append(
-                PlannedWrite(
-                    relative_path=strm_relative,
-                    content=f"{strm_prefix.rstrip('/')}/{video_relative.as_posix()}",
-                )
+        write_strms.append(
+            PlannedWrite(
+                relative_path=strm_relative,
+                content=f"{strm_prefix.rstrip('/')}/{video_relative.as_posix()}",
             )
+        )
 
-    # 不再同步 sidecar 文件（png, nfo 等元数据）
     return SyncPlan(write_strms, [], [], warnings, True)
