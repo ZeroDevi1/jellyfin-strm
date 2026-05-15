@@ -1,0 +1,17 @@
+---
+name: "115 STRM Sync"
+guid: "81d1c440-520b-4595-ba5f-69a91db327bc"
+version: "0.1.0.0"
+targetAbi: "10.9.0.0"
+framework: "net9.0"
+overview: "为 Jellyfin 生成 115 网盘影子 STRM 库的同步插件"
+description: >
+  在 Jellyfin 服务器内部运行，监听本地影子库目录变化，
+  根据 .nfo 文件自动为对应的视频文件生成 .strm 链接，
+  并支持定时全量同步与自动触发 Jellyfin 媒体库刷新。
+category: "General"
+owner: "zerodevi1"
+artifacts:
+  - "Jellyfin.Plugin.StrmSync.dll"
+changelog: >
+  Initial release with STRM sync scheduled task and background file watcher.

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>115 STRM Sync</title>
+</head>
+<body>
+    <div id="strmSyncConfigurationPage" data-role="page" class="page type-interior pluginConfigurationPage">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="strmSyncConfigurationForm">
+                    <div class="verticalSection verticalSection-extrabottompadding">
+                        <div class="sectionTitleContainer flex align-items-center">
+                            <h2 class="sectionTitle">115 STRM Sync 配置</h2>
+                        </div>
+                        <p>配置 115 网盘影子 STRM 库的同步参数。</p>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="SourceRoot">源目录 (Source Root)</label>
+                            <input id="SourceRoot" name="SourceRoot" type="text" is="emby-input" />
+                            <div class="fieldDescription">CloudDrive/115 挂载根目录的绝对路径（只读）</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="ShadowRoot">影子库目录 (Shadow Root)</label>
+                            <input id="ShadowRoot" name="ShadowRoot" type="text" is="emby-input" />
+                            <div class="fieldDescription">本地影子库根目录的绝对路径（可写）</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="StrmPrefix">STRM 前缀路径</label>
+                            <input id="StrmPrefix" name="StrmPrefix" type="text" is="emby-input" />
+                            <div class="fieldDescription">Jellyfin 容器内访问源目录的绝对路径前缀</div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescripton">
+                            <label>
+                                <input id="WatchEnabled" name="WatchEnabled" type="checkbox" is="emby-checkbox" />
+                                <span>启用文件监听</span>
+                            </label>
+                            <div class="fieldDescription">常驻轮询影子库目录变化，检测到变更时立即同步</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="WatchIntervalSeconds">轮询间隔（秒）</label>
+                            <input id="WatchIntervalSeconds" name="WatchIntervalSeconds" type="number" is="emby-input" min="5" max="3600" />
+                        </div>
+                    </div>
+
+                    <div class="verticalSection verticalSection-extrabottompadding">
+                        <div class="sectionTitleContainer flex align-items-center">
+                            <h2 class="sectionTitle">Jellyfin 刷新</h2>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescripton">
+                            <label>
+                                <input id="JellyfinEnabled" name="JellyfinEnabled" type="checkbox" is="emby-checkbox" />
+                                <span>启用 Jellyfin 库刷新</span>
+                            </label>
+                            <div class="fieldDescription">同步完成后自动请求 Jellyfin 刷新媒体库</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyfinServerUrl">Jellyfin 服务器地址</label>
+                            <input id="JellyfinServerUrl" name="JellyfinServerUrl" type="text" is="emby-input" />
+                            <div class="fieldDescription">例如：http://localhost:8096</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyfinApiKey">API Key</label>
+                            <input id="JellyfinApiKey" name="JellyfinApiKey" type="text" is="emby-input" />
+                            <div class="fieldDescription">Jellyfin API Key（用于触发库刷新）</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyfinLibraryName">媒体库名称</label>
+                            <input id="JellyfinLibraryName" name="JellyfinLibraryName" type="text" is="emby-input" />
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyfinDebounceSeconds">刷新节流时间（秒）</label>
+                            <input id="JellyfinDebounceSeconds" name="JellyfinDebounceSeconds" type="number" is="emby-input" min="0" max="86400" />
+                            <div class="fieldDescription">两次刷新之间的最小间隔</div>
+                        </div>
+                    </div>
+
+                    <div class="verticalSection verticalSection-extrabottompadding">
+                        <div class="sectionTitleContainer flex align-items-center">
+                            <h2 class="sectionTitle">高级选项</h2>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="VideoExtensions">视频扩展名</label>
+                            <input id="VideoExtensions" name="VideoExtensions" type="text" is="emby-input" />
+                            <div class="fieldDescription">逗号分隔，例如：.mp4,.mkv,.avi</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="SidecarExtensions">Sidecar 扩展名</label>
+                            <input id="SidecarExtensions" name="SidecarExtensions" type="text" is="emby-input" />
+                            <div class="fieldDescription">逗号分隔，例如：.nfo,.jpg,.srt</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="ExcludeDirectories">排除目录</label>
+                            <input id="ExcludeDirectories" name="ExcludeDirectories" type="text" is="emby-input" />
+                            <div class="fieldDescription">逗号分隔，扫描时忽略的目录名称</div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block">
+                            <span>保存</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            var StrmSyncConfig = {
+                pluginUniqueId: "81d1c440-520b-4595-ba5f-69a91db327bc"
+            };
+
+            document.querySelector('#strmSyncConfigurationPage')
+                .addEventListener('pageshow', function () {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(StrmSyncConfig.pluginUniqueId).then(function (config) {
+                        document.querySelector('#SourceRoot').value = config.SourceRoot || '';
+                        document.querySelector('#ShadowRoot').value = config.ShadowRoot || '';
+                        document.querySelector('#StrmPrefix').value = config.StrmPrefix || '';
+                        document.querySelector('#WatchEnabled').checked = config.WatchEnabled;
+                        document.querySelector('#WatchIntervalSeconds').value = config.WatchIntervalSeconds || 30;
+                        document.querySelector('#JellyfinEnabled').checked = config.JellyfinEnabled;
+                        document.querySelector('#JellyfinServerUrl').value = config.JellyfinServerUrl || '';
+                        document.querySelector('#JellyfinApiKey').value = config.JellyfinApiKey || '';
+                        document.querySelector('#JellyfinLibraryName').value = config.JellyfinLibraryName || '115strm';
+                        document.querySelector('#JellyfinDebounceSeconds').value = config.JellyfinDebounceSeconds || 600;
+                        document.querySelector('#VideoExtensions').value = (config.VideoExtensions || []).join(',');
+                        document.querySelector('#SidecarExtensions').value = (config.SidecarExtensions || []).join(',');
+                        document.querySelector('#ExcludeDirectories').value = (config.ExcludeDirectories || []).join(',');
+                        Dashboard.hideLoadingMsg();
+                    });
+                });
+
+            document.querySelector('#strmSyncConfigurationForm')
+                .addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(StrmSyncConfig.pluginUniqueId).then(function (config) {
+                        config.SourceRoot = document.querySelector('#SourceRoot').value;
+                        config.ShadowRoot = document.querySelector('#ShadowRoot').value;
+                        config.StrmPrefix = document.querySelector('#StrmPrefix').value;
+                        config.WatchEnabled = document.querySelector('#WatchEnabled').checked;
+                        config.WatchIntervalSeconds = parseInt(document.querySelector('#WatchIntervalSeconds').value, 10) || 30;
+                        config.JellyfinEnabled = document.querySelector('#JellyfinEnabled').checked;
+                        config.JellyfinServerUrl = document.querySelector('#JellyfinServerUrl').value;
+                        config.JellyfinApiKey = document.querySelector('#JellyfinApiKey').value;
+                        config.JellyfinLibraryName = document.querySelector('#JellyfinLibraryName').value || '115strm';
+                        config.JellyfinDebounceSeconds = parseInt(document.querySelector('#JellyfinDebounceSeconds').value, 10) || 600;
+                        config.VideoExtensions = document.querySelector('#VideoExtensions').value.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s; });
+                        config.SidecarExtensions = document.querySelector('#SidecarExtensions').value.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s; });
+                        config.ExcludeDirectories = document.querySelector('#ExcludeDirectories').value.split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(function (s) { return s; });
+                        ApiClient.updatePluginConfiguration(StrmSyncConfig.pluginUniqueId, config).then(function () {
+                            Dashboard.processPluginConfigurationUpdateResult();
+                        });
+                    });
+                    return false;
+                });
+        </script>
+    </div>
+</body>
+</html>

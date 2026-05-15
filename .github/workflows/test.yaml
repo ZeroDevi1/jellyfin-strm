@@ -1,0 +1,44 @@
+name: '🧪 Test Plugin'
+
+on:
+  push:
+    branches:
+      - jellyfin-plugin
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'src/**'
+      - 'tests/**'
+      - 'config.example.yaml'
+      - 'docker-compose.nas.example.yml'
+      - 'Dockerfile'
+  pull_request:
+    branches:
+      - jellyfin-plugin
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'src/**'
+      - 'tests/**'
+      - 'config.example.yaml'
+      - 'docker-compose.nas.example.yml'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore Jellyfin.Plugin.StrmSync/Jellyfin.Plugin.StrmSync.csproj
+
+      - name: Build
+        run: dotnet build Jellyfin.Plugin.StrmSync/Jellyfin.Plugin.StrmSync.csproj --configuration Release --no-restore

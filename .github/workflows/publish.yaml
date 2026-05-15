@@ -1,0 +1,84 @@
+name: '🚀 Publish Plugin'
+
+on:
+  release:
+    types:
+      - released
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install JPRM
+        run: pip install jprm
+
+      - name: Build Jellyfin Plugin
+        uses: oddstr13/jellyfin-plugin-repository-manager@v1.1.1
+        id: jprm
+        with:
+          dotnet-target: 'net9.0'
+          output: './artifacts'
+
+      - name: Determine artifact info
+        id: artifact
+        run: |
+          ARTIFACT="${{ steps.jprm.outputs.artifact }}"
+          FILENAME=$(basename "$ARTIFACT")
+          echo "filename=${FILENAME}" >> "$GITHUB_OUTPUT"
+          echo "path=${ARTIFACT}" >> "$GITHUB_OUTPUT"
+          REPO="${{ github.repository }}"
+          TAG="${{ github.event.release.tag_name || github.ref_name }}"
+          URL="https://github.com/${REPO}/releases/download/${TAG}/${FILENAME}"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "Artifact: ${FILENAME}"
+          echo "URL: ${URL}"
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release'
+        uses: shogo82148/actions-upload-release-asset@v1
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ${{ steps.artifact.outputs.path }}
+
+      - name: Update manifest.json
+        run: |
+          jprm repo add . ${{ steps.artifact.outputs.path }} \
+            --plugin-url "${{ steps.artifact.outputs.url }}"
+          cat manifest.json | python3 -m json.tool
+
+      - name: Sync manifest to pages
+        run: |
+          mkdir -p pages
+          cp manifest.json pages/manifest.json
+          touch pages/.nojekyll
+
+      - name: Commit manifest.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json pages/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update manifest.json for ${{ github.event.release.tag_name }}"
+            git push origin HEAD:${{ github.event.release.target_commitish || github.ref_name }}
+          fi
