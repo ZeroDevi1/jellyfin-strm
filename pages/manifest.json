@@ -11,9 +11,9 @@
                 "version": "0.1.0.0",
                 "changelog": "Initial release with STRM sync scheduled task and background file watcher.\n",
                 "targetAbi": "10.9.0.0",
-                "sourceUrl": "https://github.com/zerodevi1/jellyfin-strm/releases/download/v0.1.0.0/115-strm-sync_0.1.0.0.zip",
-                "checksum": "b2513b00c8a655a11e5b4444bf3004a2",
-                "timestamp": "2026-05-15T15:52:39Z"
+                "sourceUrl": "https://github.com/ZeroDevi1/jellyfin-strm/releases/download/v0.1.0.0/115-strm-sync_0.1.0.0.zip",
+                "checksum": "155cdb70bd9204da76e2505dd8f93a75",
+                "timestamp": "2026-05-15T15:59:25Z"
             }
         ]
     }
