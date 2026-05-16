@@ -90,7 +90,12 @@ jobs:
             if [ -n "${{ github.event.release.target_commitish }}" ]; then
               git push origin HEAD:${{ github.event.release.target_commitish }}
             else
-              BRANCH=$(git branch -r --contains HEAD --format='%(refname:short)' | grep 'origin/' | grep -v 'HEAD' | head -1 | sed 's|origin/||')
-              git push origin HEAD:"${BRANCH}"
+              # tag push 场景：detached HEAD 下 git branch 可能返回空，用更可靠的方式检测
+              BRANCH=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ --contains HEAD 2>/dev/null | grep -v 'HEAD' | head -1 | sed 's|origin/||' | xargs)
+              if [ -z "$BRANCH" ]; then
+                # 兜底：默认推送到 jellyfin-plugin 分支
+                BRANCH="jellyfin-plugin"
+              fi
+              git push origin HEAD:"$BRANCH"
             fi
           fi
