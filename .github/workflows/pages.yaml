@@ -32,7 +32,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # workflow_run 的 head_sha 是 Publish 工作流开始时的 commit，
+          # 不包含 bot 后续推送的 manifest.json 更新，所以检出分支最新状态
+          ref: ${{ github.event.workflow_run.head_branch || 'jellyfin-plugin' }}
 
       - name: Ensure manifest in pages
         run: |
