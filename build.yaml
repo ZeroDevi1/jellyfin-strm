@@ -2,7 +2,7 @@
 name: "115 STRM Sync"
 guid: "81d1c440-520b-4595-ba5f-69a91db327bc"
 version: "0.1.5.0"
-targetAbi: "10.9.0.0"
+targetAbi: "10.10.0.0"
 framework: "net9.0"
 overview: "为 Jellyfin 生成 115 网盘影子 STRM 库的同步插件"
 description: >

@@ -8,9 +8,37 @@
         <div data-role="content">
             <div class="content-primary">
                 <form id="strmSyncConfigurationForm">
+                    <!-- 状态面板 -->
                     <div class="verticalSection verticalSection-extrabottompadding">
                         <div class="sectionTitleContainer flex align-items-center">
-                            <h2 class="sectionTitle">115 STRM Sync 配置</h2>
+                            <h2 class="sectionTitle">运行状态</h2>
+                        </div>
+
+                        <div class="detailSection" style="margin-bottom: 1.5em;">
+                            <div class="detailLine" style="display: flex; flex-wrap: wrap; gap: 1em;">
+                                <div style="flex: 1; min-width: 200px;">
+                                    <span class="label" style="color: #999; font-size: 0.9em;">文件监听</span>
+                                    <div id="StatusWatcher" class="fieldDescription" style="font-size: 1.1em; color: #fff;">--</div>
+                                </div>
+                                <div style="flex: 1; min-width: 200px;">
+                                    <span class="label" style="color: #999; font-size: 0.9em;">STRM 文件数量</span>
+                                    <div id="StatusStrmCount" class="fieldDescription" style="font-size: 1.1em; color: #fff;">--</div>
+                                </div>
+                                <div style="flex: 1; min-width: 200px;">
+                                    <span class="label" style="color: #999; font-size: 0.9em;">上次同步</span>
+                                    <div id="StatusLastSync" class="fieldDescription" style="font-size: 1.1em; color: #fff;">--</div>
+                                </div>
+                            </div>
+                            <div class="detailLine" style="margin-top: 0.5em;">
+                                <span class="label" style="color: #999; font-size: 0.9em;">上次结果</span>
+                                <div id="StatusLastResult" class="fieldDescription" style="color: #ccc;">--</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="verticalSection verticalSection-extrabottompadding">
+                        <div class="sectionTitleContainer flex align-items-center">
+                            <h2 class="sectionTitle">目录配置</h2>
                         </div>
                         <p>配置 115 网盘影子 STRM 库的同步参数。</p>
 
@@ -107,6 +135,10 @@
                         </div>
                     </div>
 
+                    <div id="SaveError" class="fieldDescription" style="color: #ff6b6b; margin-bottom: 1em; display: none;">
+                        保存失败，请检查控制台日志。
+                    </div>
+
                     <div>
                         <button is="emby-button" type="submit" class="raised button-submit block">
                             <span>保存</span>
@@ -121,10 +153,43 @@
                 pluginUniqueId: "81d1c440-520b-4595-ba5f-69a91db327bc"
             };
 
-            document.querySelector('#strmSyncConfigurationPage')
-                .addEventListener('pageshow', function () {
-                    Dashboard.showLoadingMsg();
-                    ApiClient.getPluginConfiguration(StrmSyncConfig.pluginUniqueId).then(function (config) {
+            function formatDateTime(isoString) {
+                if (!isoString) return '从未';
+                try {
+                    var d = new Date(isoString);
+                    if (isNaN(d.getTime())) return '从未';
+                    return d.toLocaleString('zh-CN');
+                } catch (e) {
+                    return '从未';
+                }
+            }
+
+            function updateStatusPanel(config) {
+                var watcherEl = document.querySelector('#StatusWatcher');
+                var strmEl = document.querySelector('#StatusStrmCount');
+                var lastSyncEl = document.querySelector('#StatusLastSync');
+                var lastResultEl = document.querySelector('#StatusLastResult');
+
+                if (watcherEl) {
+                    watcherEl.textContent = (config.IsWatcherRunning ? '运行中' : '已停止');
+                    watcherEl.style.color = config.IsWatcherRunning ? '#4caf50' : '#ff9800';
+                }
+                if (strmEl) {
+                    strmEl.textContent = (config.TotalStrmCount || 0) + ' 个';
+                }
+                if (lastSyncEl) {
+                    lastSyncEl.textContent = formatDateTime(config.LastSyncTime);
+                }
+                if (lastResultEl) {
+                    lastResultEl.textContent = config.LastSyncResult || '尚无同步记录';
+                }
+            }
+
+            function loadConfig() {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(StrmSyncConfig.pluginUniqueId)
+                    .then(function (config) {
+                        // 填充表单
                         document.querySelector('#SourceRoot').value = config.SourceRoot || '';
                         document.querySelector('#ShadowRoot').value = config.ShadowRoot || '';
                         document.querySelector('#StrmPrefix').value = config.StrmPrefix || '';
@@ -138,32 +203,61 @@
                         document.querySelector('#VideoExtensions').value = (config.VideoExtensions || []).join(',');
                         document.querySelector('#SidecarExtensions').value = (config.SidecarExtensions || []).join(',');
                         document.querySelector('#ExcludeDirectories').value = (config.ExcludeDirectories || []).join(',');
+
+                        // 更新状态面板
+                        updateStatusPanel(config);
+
                         Dashboard.hideLoadingMsg();
+                    })
+                    .catch(function (err) {
+                        console.error('Failed to load plugin configuration:', err);
+                        Dashboard.hideLoadingMsg();
+                        Dashboard.alert({
+                            title: '加载失败',
+                            message: '无法加载插件配置，请检查插件是否已正确安装。'
+                        });
                     });
-                });
+            }
+
+            document.querySelector('#strmSyncConfigurationPage')
+                .addEventListener('pageshow', loadConfig);
 
             document.querySelector('#strmSyncConfigurationForm')
                 .addEventListener('submit', function (e) {
                     e.preventDefault();
                     Dashboard.showLoadingMsg();
-                    ApiClient.getPluginConfiguration(StrmSyncConfig.pluginUniqueId).then(function (config) {
-                        config.SourceRoot = document.querySelector('#SourceRoot').value;
-                        config.ShadowRoot = document.querySelector('#ShadowRoot').value;
-                        config.StrmPrefix = document.querySelector('#StrmPrefix').value;
-                        config.WatchEnabled = document.querySelector('#WatchEnabled').checked;
-                        config.WatchIntervalSeconds = parseInt(document.querySelector('#WatchIntervalSeconds').value, 10) || 30;
-                        config.JellyfinEnabled = document.querySelector('#JellyfinEnabled').checked;
-                        config.JellyfinServerUrl = document.querySelector('#JellyfinServerUrl').value;
-                        config.JellyfinApiKey = document.querySelector('#JellyfinApiKey').value;
-                        config.JellyfinLibraryName = document.querySelector('#JellyfinLibraryName').value || '115strm';
-                        config.JellyfinDebounceSeconds = parseInt(document.querySelector('#JellyfinDebounceSeconds').value, 10) || 600;
-                        config.VideoExtensions = document.querySelector('#VideoExtensions').value.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s; });
-                        config.SidecarExtensions = document.querySelector('#SidecarExtensions').value.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s; });
-                        config.ExcludeDirectories = document.querySelector('#ExcludeDirectories').value.split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(function (s) { return s; });
-                        ApiClient.updatePluginConfiguration(StrmSyncConfig.pluginUniqueId, config).then(function () {
+                    document.querySelector('#SaveError').style.display = 'none';
+
+                    ApiClient.getPluginConfiguration(StrmSyncConfig.pluginUniqueId)
+                        .then(function (config) {
+                            config.SourceRoot = document.querySelector('#SourceRoot').value;
+                            config.ShadowRoot = document.querySelector('#ShadowRoot').value;
+                            config.StrmPrefix = document.querySelector('#StrmPrefix').value;
+                            config.WatchEnabled = document.querySelector('#WatchEnabled').checked;
+                            config.WatchIntervalSeconds = parseInt(document.querySelector('#WatchIntervalSeconds').value, 10) || 30;
+                            config.JellyfinEnabled = document.querySelector('#JellyfinEnabled').checked;
+                            config.JellyfinServerUrl = document.querySelector('#JellyfinServerUrl').value;
+                            config.JellyfinApiKey = document.querySelector('#JellyfinApiKey').value;
+                            config.JellyfinLibraryName = document.querySelector('#JellyfinLibraryName').value || '115strm';
+                            config.JellyfinDebounceSeconds = parseInt(document.querySelector('#JellyfinDebounceSeconds').value, 10) || 600;
+                            config.VideoExtensions = document.querySelector('#VideoExtensions').value.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s; });
+                            config.SidecarExtensions = document.querySelector('#SidecarExtensions').value.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s; });
+                            config.ExcludeDirectories = document.querySelector('#ExcludeDirectories').value.split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(function (s) { return s; });
+
+                            return ApiClient.updatePluginConfiguration(StrmSyncConfig.pluginUniqueId, config);
+                        })
+                        .then(function () {
+                            Dashboard.hideLoadingMsg();
                             Dashboard.processPluginConfigurationUpdateResult();
+                            // 重新加载以刷新状态面板
+                            loadConfig();
+                        })
+                        .catch(function (err) {
+                            console.error('Failed to save plugin configuration:', err);
+                            Dashboard.hideLoadingMsg();
+                            document.querySelector('#SaveError').style.display = 'block';
                         });
-                    });
+
                     return false;
                 });
         </script>

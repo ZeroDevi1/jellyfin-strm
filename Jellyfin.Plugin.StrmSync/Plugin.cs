@@ -46,7 +46,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IPluginServ
         {
             new PluginPageInfo
             {
-                Name = Name,
+                Name = "StrmSyncConfig",
                 EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Configuration.configPage.html", GetType().Namespace)
             }
         };

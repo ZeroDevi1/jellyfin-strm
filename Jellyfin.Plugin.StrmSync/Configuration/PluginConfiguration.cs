@@ -30,6 +30,12 @@ public class PluginConfiguration : BasePluginConfiguration
         JellyfinApiKey = string.Empty;
         JellyfinLibraryName = "115strm";
         JellyfinDebounceSeconds = 600;
+
+        // 运行时状态字段（由服务自动更新，不持久化到配置文件）
+        LastSyncTime = null;
+        LastSyncResult = string.Empty;
+        TotalStrmCount = 0;
+        IsWatcherRunning = false;
     }
 
     /// <summary>
@@ -116,4 +122,24 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the Jellyfin refresh debounce seconds.
     /// </summary>
     public int JellyfinDebounceSeconds { get; set; }
+
+    /// <summary>
+    /// Gets or sets the last sync time.
+    /// </summary>
+    public DateTime? LastSyncTime { get; set; }
+
+    /// <summary>
+    /// Gets or sets the last sync result message.
+    /// </summary>
+    public string LastSyncResult { get; set; }
+
+    /// <summary>
+    /// Gets or sets the total number of STRM files.
+    /// </summary>
+    public int TotalStrmCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the file watcher is running.
+    /// </summary>
+    public bool IsWatcherRunning { get; set; }
 }

@@ -70,6 +70,14 @@ public class StrmSyncTask : IScheduledTask
         var generator = new StrmGenerator(_logger);
         var summary = generator.Sync(config, dryRun: false);
 
+        config.LastSyncTime = DateTime.UtcNow;
+        config.LastSyncResult = $"STRM: {summary.WrittenStrms}, Copied: {summary.CopiedFiles}, Deleted: {summary.DeletedPaths}";
+
+        if (!string.IsNullOrWhiteSpace(config.ShadowRoot) && Directory.Exists(config.ShadowRoot))
+        {
+            config.TotalStrmCount = Directory.GetFiles(config.ShadowRoot, "*.strm", SearchOption.AllDirectories).Length;
+        }
+
         if (summary.HasChanges && config.JellyfinEnabled)
         {
             var stateDir = Path.Combine(config.ShadowRoot, ".jellyfin-strm-state");

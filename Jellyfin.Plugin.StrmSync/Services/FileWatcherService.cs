@@ -19,6 +19,11 @@ public class FileWatcherService : IHostedService, IDisposable
     private string _lastSnapshot = string.Empty;
 
     /// <summary>
+    /// Gets a value indicating whether the watcher service is currently running.
+    /// </summary>
+    public static bool IsRunning { get; private set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="FileWatcherService"/> class.
     /// </summary>
     /// <param name="logger">Logger instance.</param>
@@ -31,6 +36,13 @@ public class FileWatcherService : IHostedService, IDisposable
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("STRM file watcher service starting.");
+        IsRunning = true;
+        var config = Plugin.Instance?.Configuration;
+        if (config != null)
+        {
+            config.IsWatcherRunning = true;
+        }
+
         _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _executeTask = ExecuteAsync(_stoppingCts.Token);
         return _executeTask.IsCompleted ? _executeTask : Task.CompletedTask;
@@ -40,6 +52,13 @@ public class FileWatcherService : IHostedService, IDisposable
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("STRM file watcher service stopping.");
+        IsRunning = false;
+        var config = Plugin.Instance?.Configuration;
+        if (config != null)
+        {
+            config.IsWatcherRunning = false;
+        }
+
         if (_stoppingCts is null)
         {
             return;
@@ -76,6 +95,14 @@ public class FileWatcherService : IHostedService, IDisposable
                     {
                         _logger.LogInformation("Shadow directory changed, triggering sync.");
                         var summary = generator.Sync(config, dryRun: false);
+
+                        config.LastSyncTime = DateTime.UtcNow;
+                        config.LastSyncResult = $"STRM: {summary.WrittenStrms}, Copied: {summary.CopiedFiles}, Deleted: {summary.DeletedPaths}";
+
+                        if (!string.IsNullOrWhiteSpace(config.ShadowRoot) && Directory.Exists(config.ShadowRoot))
+                        {
+                            config.TotalStrmCount = Directory.GetFiles(config.ShadowRoot, "*.strm", SearchOption.AllDirectories).Length;
+                        }
 
                         if (summary.HasChanges && config.JellyfinEnabled)
                         {
